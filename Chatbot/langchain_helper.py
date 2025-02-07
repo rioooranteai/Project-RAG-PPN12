@@ -1,4 +1,6 @@
 import os
+import asyncio
+import warnings
 
 from dotenv import load_dotenv
 from pinecone import Pinecone
@@ -7,6 +9,10 @@ from langchain_pinecone import PineconeVectorStore
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
 from langchain_openai import OpenAI
+from langchain.memory import ConversationSummaryBufferMemory
+
+warnings.filterwarnings('ignore')
+
 
 # Memuat variabel lingkungan
 load_dotenv()
@@ -23,7 +29,7 @@ index_name = pc.Index("rag-ppn-12")  # Pastikan index ini sudah dibuat di Pineco
 vectorstore = PineconeVectorStore(index=index_name, embedding=embeddings)
 
 # Membuat retriever dari vectorstore
-retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 3})
 
 # Inisialisasi LLM dengan OpenAI API key
 llm = OpenAI(openai_api_key=os.getenv("OPENAI_API_KEY"))
@@ -42,30 +48,38 @@ Jawaban:"""
 
 prompt_template = PromptTemplate(input_variables=['context', 'question'], template=template)
 
+memory = ConversationSummaryBufferMemory(
+    llm=llm,
+    input_key='question',
+    output_key='answer',
+    memory_key='chat_history',
+    return_messages=True,
+    max_token_limit=1000
+)
+
 # Inisialisasi ConversationalRetrievalChain
 chain = ConversationalRetrievalChain.from_llm(
     llm=llm,
     retriever=retriever,
     return_source_documents=True,  # Debugging untuk melihat sumber dokumen
-    combine_docs_chain_kwargs={"prompt": prompt_template}
+    combine_docs_chain_kwargs={"prompt": prompt_template},
+    memory=memory
 )
 
 # Chat history untuk menyimpan percakapan
 chat_history = []
 
 # Fungsi chatbot yang menggabungkan retrieval dan question generation
-def chatbot(prompt):
-    global chat_history  # Agar history tetap tersimpan
+async def chatbot(prompt):
+    context = memory.chat_memory.messages if memory.chat_memory and memory.chat_memory.messages else []
+    context_sentence = "\n".join([message.content for message in context]) if context else ""
 
-    # Proses pertanyaan ke dalam chain
-    result = chain.invoke({"question": prompt, "chat_history": chat_history})
+    result = await chain.ainvoke({"context":context_sentence,
+                                  "question":prompt})
 
-    # Simpan pertanyaan & jawaban ke dalam chat history
-    chat_history.append((prompt, result["answer"]))
+    chat_history.append((prompt, result['answer']))
 
-    # Tampilkan hasil jawaban chatbot
-    print(result["answer"])
+    return chat_history
 
 
-# Contoh pemanggilan chatbot
-chatbot("Hari apa besok?")
+
