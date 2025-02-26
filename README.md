@@ -1,6 +1,6 @@
 # Technical Report: TaxTwelve
 ## 🚀 Status Project: In Progress
-
+- Pengembangan UI chatbot agar lebih rapi menggunakan streamlit
 ## 🔑 Keywords
 **LangChain, Pinecone, OpenAI GPT, Streamlit, Web Scraping, CNN Indonesia, PPN 12 Persen, Retrieval-Augmented Generation (RAG), Conversational AI, Async Python**
 
